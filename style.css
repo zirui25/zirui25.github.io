@@ -267,6 +267,44 @@
 }
 
 /* ------------------ 新闻列表样式（类似截图） ------------------ */
+<!-- 核心样式 -->
+<style>
+.content-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    padding: 8px 0;
+}
+.text-section {
+    flex: 1;
+}
+.main-content {
+    font-size: 16px;
+    line-height: 1.5;
+    color: #333;
+    margin: 0 0 8px 0;
+}
+.sub-content {
+    font-size: 14px;
+    color: #666;
+    position: relative;
+}
+.close-icon {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    line-height: 16px;
+    text-align: center;
+    color: #999;
+    cursor: pointer;
+    margin-left: 10px;
+}
+.img-section img {
+    width: 180px;
+    height: auto;
+    border: none;
+}
+</style>
 .news-list {
     display: flex;
     flex-direction: column;
