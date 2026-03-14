@@ -91,20 +91,61 @@
         </div>
 
         <!-- 核心内容区域 -->
-<div class="content-box">
-    <!-- 文字部分 -->
-    <div class="text-section">
-        <p class="main-content">1，2，3，4.....</p>
-        <div class="sub-content">
-            中国旅游报 6评论 昨天10:50
-            <span class="close-icon">×</span>
+<!-- 通用布局模板 -->
+<div class="news-card">
+    <!-- 文字内容区域 -->
+    <div class="news-text">
+        <!-- 主内容（可替换成1、2、3、4...或任意文字） -->
+        <p class="news-main">深圳世界之窗研学资料发布</p>
+        <!-- 次要信息（来源/评论/时间） -->
+        <div class="news-meta">
+            张梓睿   2026年3月14日20点32分
+            <span class="close-btn">×</span>
         </div>
     </div>
-    <!-- 图片部分 -->
-    <div class="img-section">
-        <img src="https://p11-flow-imagex-download-sign.byteimg.com/tos-cn-i-a9rns2rl98/9e4b6793a4784a3bbdfe7e69f12c8c8a.png~tplv-a9rns2rl98-24:720:720.png?lk3s=8e244e95&rcl=202603142022015E736696BFCBC6C848AB&rrcfp=8a172a1a&x-expires=1774095721&x-signature=%2BZ%2FqdCI03Gh%2F%2BGV4ucOGrqsopdc%3D" alt="示例图片">
+    <!-- 图片区域（仅保留占位结构） -->
+    <div class="news-img">
+        <img src="https://tse3-mm.cn.bing.net/th/id/OIP-C.XBK9syciXUp6OOXlQPu3UgHaE8?w=301&h=201&c=7&r=0&o=7&pid=1.7&rm=3" alt="图片描述">
     </div>
 </div>
+
+<!-- 模板样式（与原布局一致） -->
+<style>
+.news-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px; /* 文字和图片的间距 */
+    padding: 8px 0;
+    max-width: 800px; /* 整体宽度限制 */
+}
+.news-text {
+    flex: 1; /* 文字区域占满剩余宽度 */
+}
+.news-main {
+    font-size: 16px;
+    line-height: 1.5;
+    color: #333; /* 主文字颜色 */
+    margin: 0 0 8px 0; /* 主内容和次要信息的间距 */
+}
+.news-meta {
+    font-size: 14px;
+    color: #666; /* 次要信息颜色 */
+}
+.close-btn {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    line-height: 16px;
+    text-align: center;
+    color: #999;
+    cursor: pointer;
+    margin-left: 10px;
+}
+.news-img img {
+    width: 180px; /* 图片宽度，与原样式一致 */
+    height: auto; /* 保持图片比例 */
+}
+</style>
 
 
     <!-- 核心产品展示区 -->
