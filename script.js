@@ -144,7 +144,35 @@ function initNewsToggle() {
         }
     });
 }
+/**
+ * 新闻卡片模块 JS
+ * 功能：点击卡片跳转（链接使用 # 占位，后续替换即可）
+ * 如需动态渲染数据，可在此扩展
+ */
 
+(function() {
+    'use strict';
+
+    // 获取所有新闻卡片
+    const cards = document.querySelectorAll('.news-card');
+
+    // 为每个卡片绑定点击事件（如果已有 href 则使用，否则默认 #）
+    cards.forEach(card => {
+        card.addEventListener('click', function(e) {
+            const href = this.getAttribute('href') || '#';
+            
+            // 如果是 # 则阻止默认跳转，仅用于占位演示
+            if (href === '#') {
+                e.preventDefault();
+                console.log('🔗 卡片点击（链接占位 #），可替换为实际文章地址');
+                // 如果需要实际跳转，放开下行注释并设置真实链接
+                // window.location.href = href;
+            }
+            // 真实链接会正常跳转
+        });
+    });
+
+})();
 // 处理联系表单提交
 async function handleContactSubmit(e) {
     e.preventDefault();
