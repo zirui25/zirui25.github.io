@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <title>文档查看阅览套件</title>
+    <!-- PDF.js 和 mammoth.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+        }
+        .toolbar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(255,255,255,0.96);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid #e9ecef;
+            padding: 8px 16px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: #f8f9fa;
+            padding: 4px 12px;
+            border-radius: 40px;
+        }
+        .toolbar button, .toolbar select {
+            background: transparent;
+            border: none;
+            padding: 6px 12px;
+            font-size: 13px;
+            border-radius: 30px;
+            cursor: pointer;
+        }
+        .toolbar button:hover {
+            background: #e9ecef;
+        }
+        .separator {
+            width: 1px;
+            height: 24px;
+            background: #dee2e6;
+        }
+        .document-container {
+            max-width: 1000px;
+            margin: 20px auto;
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+            overflow: hidden;
+            position: relative;
+        }
+        .doc-content {
+            padding: 40px 48px;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        .pdf-canvas {
+            width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+        }
+        @media (max-width: 700px) {
+            .toolbar { overflow-x: auto; flex-wrap: nowrap; }
+            .doc-content { padding: 20px 16px; }
+        }
+        .popup-menu {
+            position: fixed;
+            background: white;
+            border-radius: 40px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+            display: flex;
+            gap: 6px;
+            padding: 6px 12px;
+            z-index: 1000;
+        }
+        .annotation-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: auto;
+            cursor: crosshair;
+        }
+        .modal {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            visibility: hidden;
+            z-index: 1001;
+        }
+        .modal-card {
+            background: white;
+            border-radius: 32px;
+            padding: 24px;
+            width: 280px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<div class="toolbar" id="toolbar">
+    <div class="toolbar-group"><button id="infoBtn">📄 文档信息</button><button id="downloadBtn">⬇️ 下载</button><button id="shareBtn">🔗 分享</button></div>
+    <div class="separator"></div>
+    <div class="toolbar-group"><button id="readModeBtn">📖 阅读</button><button id="drawModeBtn">✏️ 批注</button></div>
+    <div class="separator"></div>
+    <div class="toolbar-group" id="fontControls" style="display:none;"><select id="fontFamily"><option>系统默认</option><option>Georgia</option><option>Arial</option></select><select id="fontSize"><option>14px</option><option selected>16px</option><option>18px</option></select><input type="color" id="textColor" value="#1f2937"></div>
+    <div class="toolbar-group" id="penControls" style="display:none;"><select id="penType"><option value="highlighter">🟡 荧光笔</option><option value="pen">✏️ 铅笔</option></select><select id="penColor"><option value="#FFEB3B">黄</option><option value="#FF0000">红</option><option value="#0000FF">蓝</option><option value="#008000">绿</option><option value="#808080">灰</option></select><button id="clearAnnotations">🗑️ 清空</button></div>
+</div>
+
+<div class="document-container" id="docContainer"><div class="doc-content" id="docContent" style="text-align:center;">加载中...</div></div>
+<div id="popupMenu" class="popup-menu" style="display:none;"></div>
+<div id="infoModal" class="modal"><div class="modal-card"><h3>📄 文档信息</h3><p id="infoText"></p><button id="closeModal">关闭</button></div></div>
+
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    let currentBlob = null, currentFileUrl = "", currentFileName = "文档";
+    let isDrawMode = false, annotationCanvas = null, ctx = null, drawing = false, lastX = 0, lastY = 0;
+    let pdfDoc = null, currentPage = 1, totalPages = 0;
+
+    function getFileParam() { return new URLSearchParams(location.search).get('file'); }
+
+    async function loadFile(url) {
+        document.getElementById('docContent').innerHTML = '<div style="text-align:center;padding:40px;">⏳ 加载中...</div>';
+        currentFileUrl = url;
+        currentFileName = decodeURIComponent(url.split('/').pop()).split('?')[0] || "文档";
+        document.title = `${currentFileName}（文件在线预览器）`;
+        try {
+            const resp = await fetch(url);
+            currentBlob = await resp.blob();
+            if (url.endsWith('.pdf')) await renderPDF(currentBlob);
+            else if (url.endsWith('.docx')) await renderDOCX(currentBlob);
+            else document.getElementById('docContent').innerHTML = '<div style="color:red;padding:20px;">不支持的文件类型</div>';
+        } catch(e) { document.getElementById('docContent').innerHTML = `<div style="color:red;padding:20px;">加载失败: ${e.message}</div>`; }
+    }
+
+    async function renderPDF(blob) {
+        const arrayBuffer = await blob.arrayBuffer();
+        pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        totalPages = pdfDoc.numPages;
+        currentPage = 1;
+        const container = document.getElementById('docContent');
+        container.innerHTML = '';
+        await renderPage(currentPage);
+        addNavigation();
+    }
+
+    async function renderPage(pageNum) {
+        const page = await pdfDoc.getPage(pageNum);
+        const scale = 1.5;
+        const viewport = page.getViewport({ scale });
+        const canvas = document.createElement('canvas');
+        canvas.className = 'pdf-canvas';
+        const context = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const container = document.getElementById('docContent');
+        container.innerHTML = '';
+        container.appendChild(canvas);
+        await page.render({ canvasContext: context, viewport }).promise;
+        if (totalPages > 1) {
+            const nav = document.createElement('div');
+            nav.style.textAlign = 'center';
+            nav.style.margin = '16px';
+            nav.innerHTML = `<button id="prevPage">◀ 上一页</button> 第 ${pageNum} / ${totalPages} 页 <button id="nextPage">下一页 ▶</button>`;
+            container.appendChild(nav);
+            document.getElementById('prevPage')?.addEventListener('click', () => { if (currentPage > 1) { currentPage--; renderPage(currentPage); } });
+            document.getElementById('nextPage')?.addEventListener('click', () => { if (currentPage < totalPages) { currentPage++; renderPage(currentPage); } });
+        }
+        initAnnotationLayer();
+    }
+
+    async function renderDOCX(blob) {
+        const arrayBuffer = await blob.arrayBuffer();
+        const result = await mammoth.convertToHtml({ arrayBuffer });
+        document.getElementById('docContent').innerHTML = `<div class="doc-content">${result.value}</div>`;
+        initAnnotationLayer();
+        document.getElementById('fontFamily').onchange = () => document.querySelector('.doc-content').style.fontFamily = document.getElementById('fontFamily').value;
+        document.getElementById('fontSize').onchange = () => document.querySelector('.doc-content').style.fontSize = document.getElementById('fontSize').value;
+        document.getElementById('textColor').onchange = () => document.querySelector('.doc-content').style.color = document.getElementById('textColor').value;
+    }
+
+    function initAnnotationLayer() {
+        clearAnnotationLayer();
+        const container = document.getElementById('docContainer');
+        const target = document.querySelector('.pdf-canvas') || document.querySelector('.doc-content');
+        if (!target) return;
+        const rect = target.getBoundingClientRect();
+        const canvas = document.createElement('canvas');
+        canvas.width = target.scrollWidth;
+        canvas.height = target.scrollHeight;
+        canvas.style.position = 'absolute';
+        canvas.style.top = '0';
+        canvas.style.left = '0';
+        canvas.style.pointerEvents = 'auto';
+        canvas.classList.add('annotation-layer');
+        container.style.position = 'relative';
+        container.appendChild(canvas);
+        annotationCanvas = canvas;
+        ctx = canvas.getContext('2d');
+        attachEvents(canvas);
+    }
+
+    function attachEvents(canvas) {
+        function getXY(e) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            let cx, cy;
+            if (e.touches) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+            else { cx = e.clientX; cy = e.clientY; }
+            let x = (cx - rect.left) * scaleX;
+            let y = (cy - rect.top) * scaleY;
+            return { x: Math.min(Math.max(0, x), canvas.width), y: Math.min(Math.max(0, y), canvas.height) };
+        }
+        function start(e) { if (!isDrawMode) return; e.preventDefault(); drawing = true; const { x, y } = getXY(e); lastX = x; lastY = y; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineCap = 'round'; ctx.lineWidth = (document.getElementById('penType').value === 'highlighter') ? 12 : 3; ctx.globalAlpha = (document.getElementById('penType').value === 'highlighter') ? 0.4 : 1; ctx.strokeStyle = document.getElementById('penColor').value; ctx.lineTo(x+0.5, y+0.5); ctx.stroke(); }
+        function draw(e) { if (!drawing || !isDrawMode) return; e.preventDefault(); const { x, y } = getXY(e); ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(x, y); ctx.stroke(); lastX = x; lastY = y; }
+        function stop() { drawing = false; }
+        canvas.addEventListener('mousedown', start); canvas.addEventListener('mousemove', draw); canvas.addEventListener('mouseup', stop);
+        canvas.addEventListener('touchstart', start); canvas.addEventListener('touchmove', draw); canvas.addEventListener('touchend', stop);
+    }
+
+    function clearAnnotationLayer() { if (annotationCanvas && annotationCanvas.parentNode) annotationCanvas.parentNode.removeChild(annotationCanvas); annotationCanvas = null; ctx = null; }
+
+    function showPopup(x, y, text) {
+        const menu = document.getElementById('popupMenu');
+        menu.innerHTML = '';
+        ['#FFEB3B','#FF0000','#0000FF','#008000','#808080'].forEach(col => {
+            const btn = document.createElement('button'); btn.textContent = '●'; btn.style.color = col; btn.style.fontSize = '24px'; btn.onclick = () => highlightText(text, col);
+            menu.appendChild(btn);
+        });
+        const copyBtn = document.createElement('button'); copyBtn.textContent = '📋 复制'; copyBtn.onclick = () => { navigator.clipboard.writeText(text); hidePopup(); };
+        const searchBtn = document.createElement('button'); searchBtn.textContent = '🔍 搜索'; searchBtn.onclick = () => { window.open(`https://www.google.com/search?q=${encodeURIComponent(text)}`); hidePopup(); };
+        menu.appendChild(copyBtn); menu.appendChild(searchBtn);
+        menu.style.display = 'flex'; menu.style.left = `${x}px`; menu.style.top = `${y}px`;
+    }
+    function hidePopup() { document.getElementById('popupMenu').style.display = 'none'; }
+    function highlightText(text, color) {
+        const sel = window.getSelection(); if (sel.isCollapsed) return;
+        const range = sel.getRangeAt(0);
+        const span = document.createElement('span'); span.style.backgroundColor = color; span.style.borderRadius = '4px'; span.appendChild(range.extractContents()); range.insertNode(span); sel.removeAllRanges(); hidePopup();
+    }
+    document.addEventListener('mouseup', (e) => { if (!isDrawMode) { const sel = window.getSelection(); if (sel.toString().trim()) showPopup(e.pageX, e.pageY, sel.toString()); else hidePopup(); } });
+    document.addEventListener('touchend', (e) => { if (!isDrawMode) setTimeout(() => { const sel = window.getSelection(); if (sel.toString().trim()) showPopup(e.changedTouches[0].pageX, e.changedTouches[0].pageY, sel.toString()); else hidePopup(); }, 10); });
+
+    document.getElementById('readModeBtn').onclick = () => { isDrawMode = false; document.getElementById('fontControls').style.display = 'flex'; document.getElementById('penControls').style.display = 'none'; clearAnnotationLayer(); };
+    document.getElementById('drawModeBtn').onclick = () => { isDrawMode = true; document.getElementById('fontControls').style.display = 'none'; document.getElementById('penControls').style.display = 'flex'; initAnnotationLayer(); };
+    document.getElementById('clearAnnotations').onclick = clearAnnotationLayer;
+    document.getElementById('infoBtn').onclick = () => { document.getElementById('infoText').innerHTML = `文件：${currentFileName}<br>链接：${currentFileUrl}<br>加载时间：${new Date().toLocaleString()}`; document.getElementById('infoModal').style.visibility = 'visible'; };
+    document.getElementById('closeModal').onclick = () => document.getElementById('infoModal').style.visibility = 'hidden';
+    document.getElementById('downloadBtn').onclick = () => { if (currentBlob) { const a = document.createElement('a'); a.href = URL.createObjectURL(currentBlob); a.download = currentFileName; a.click(); } };
+    document.getElementById('shareBtn').onclick = () => { navigator.clipboard.writeText(window.location.href); alert('链接已复制'); };
+
+    const file = getFileParam();
+    if (file) loadFile(decodeURIComponent(file));
+    else document.getElementById('docContent').innerHTML = '<div style="padding:40px;text-align:center;">请在 URL 后加 ?file=文档链接<br>支持 PDF / DOCX</div>';
+</script>
+</body>
+</html>
